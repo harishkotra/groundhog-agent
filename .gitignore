@@ -1,0 +1,43 @@
+# --- runtime artifacts ---
+node_modules/
+web/node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# --- harness working area ---
+# cloned fixture repos, one per run; rebuilt from challenge/ every time
+.work/
+# live job outputs from the UI; the shipped dataset is data/runs.json
+data/live/
+
+# --- local secrets and env ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- logs and caches ---
+*.log
+logs/
+.vite/
+.cache/
+
+# --- system junk ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# --- editors ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~

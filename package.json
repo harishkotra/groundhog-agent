@@ -1,0 +1,13 @@
+{
+  "name": "groundhog-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Same coding task, same agent, same model, five runs. Fingerprint every patch.",
+  "scripts": {
+    "harness": "node harness/run-matrix.mjs --runs 5 --tasks tight,loose --parallel 3",
+    "build": "npm --prefix web install && npm --prefix web run build && node scripts/copy-data.mjs",
+    "dev": "node server.mjs",
+    "start": "node server.mjs"
+  }
+}

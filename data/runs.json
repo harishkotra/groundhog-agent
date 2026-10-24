@@ -1,0 +1,572 @@
+{
+  "generatedAt": "2026-10-23T09:08:01.369Z",
+  "startedAt": "2026-10-23T09:04:03.365Z",
+  "opencode": "1.15.13",
+  "model": "particle/deepseek-v41-flash-1017",
+  "runsPerTask": 5,
+  "tasks": {
+    "tight": {
+      "label": "Tight prompt",
+      "blurb": "One failing test, one obvious fix. No room for taste.",
+      "prompt": "The test suite fails. Fix the bug in src/invoice.js so all tests pass. Do not modify any test file."
+    },
+    "loose": {
+      "label": "Loose prompt",
+      "blurb": "Same failing test, but refactoring is invited. Room for taste.",
+      "prompt": "The test suite fails. Fix it so every test passes. You may also restructure src/invoice.js however you think best: move the pricing rules into one place, rename helpers, add comments. Do not modify any test file."
+    }
+  },
+  "summary": {
+    "tight": {
+      "runs": 5,
+      "uniquePatches": 1,
+      "identicalRuns": 5,
+      "passRate": 1,
+      "meanSimilarity": 1,
+      "families": [
+        {
+          "hash": "b96081feb79ff81cca328c9ce83e57e7aa67a6378e4fd9eb757dfea6dcb2c285",
+          "count": 5
+        }
+      ]
+    },
+    "loose": {
+      "runs": 5,
+      "uniquePatches": 5,
+      "identicalRuns": 1,
+      "passRate": 1,
+      "meanSimilarity": 0.2065697022853147,
+      "families": [
+        {
+          "hash": "ab97331bcb7d1b32e38793f03379599df81d9dfdfb0f09a54847c2a84c63324b",
+          "count": 1
+        },
+        {
+          "hash": "b96081feb79ff81cca328c9ce83e57e7aa67a6378e4fd9eb757dfea6dcb2c285",
+          "count": 1
+        },
+        {
+          "hash": "48554461f847789b455a0e3d21d1c52d3e41012b4a63add449e58e132e81b764",
+          "count": 1
+        },
+        {
+          "hash": "7e14d05a95c7dbd59f4b7c90124c7ff5d2d7eab11644f217c1b783b57849a31e",
+          "count": 1
+        },
+        {
+          "hash": "287c0c085055d75cb0b4a1a01f0b103260dd1b06488461ce8426e5837dee77d8",
+          "count": 1
+        }
+      ]
+    }
+  },
+  "runs": [
+    {
+      "task": "loose",
+      "run": 1,
+      "model": "particle/deepseek-v41-flash-1017",
+      "startedAt": "2026-10-23T09:05:07.987Z",
+      "durationMs": 56000,
+      "exitCode": 0,
+      "timedOut": false,
+      "tokens": {
+        "input": 150563,
+        "output": 1015,
+        "reasoning": 820,
+        "cacheRead": 148224,
+        "cacheWrite": 0,
+        "steps": 6
+      },
+      "toolCalls": [
+        "bash",
+        "bash",
+        "read",
+        "read",
+        "read",
+        "bash",
+        "write",
+        "bash"
+      ],
+      "finalText": "All 8 tests pass. Fixed the shipping threshold comparison (`>` \u2192 `>=`) and consolidated the tax, shipping, and discount rules into a single `PRICING` config in `src/invoice.js`.",
+      "errors": [],
+      "stderrTail": "",
+      "patchHash": "ab97331bcb7d1b32e38793f03379599df81d9dfdfb0f09a54847c2a84c63324b",
+      "files": [
+        "src/invoice.js"
+      ],
+      "added": 32,
+      "removed": 19,
+      "tests": {
+        "passed": true,
+        "passCount": 8,
+        "failCount": 0,
+        "summary": "\u2139 pass 8 \u2139 fail 0"
+      },
+      "patch": "diff --git a/src/invoice.js b/src/invoice.js\nindex cddddc2..f1624ad 100644\n--- a/src/invoice.js\n+++ b/src/invoice.js\n@@ -1,9 +1,23 @@\n // Invoice totals for a small storefront.\n-// Prices are in cents. Discounts apply per line, before tax.\n+// All money is in integer cents. Discounts apply per line, before tax.\n \n-const TAX_RATE = 0.0825;\n-const FREE_SHIPPING_OVER_CENTS = 5000;\n-const SHIPPING_CENTS = 599;\n+/**\n+ * Every monetary rule for the storefront lives here so the functions below\n+ * only have to compose them.\n+ */\n+const PRICING = {\n+  /** Sales tax rate applied to the discounted subtotal. */\n+  taxRate: 0.0825,\n+  /** Discounted subtotal at which shipping becomes free. */\n+  freeShippingThresholdCents: 5000,\n+  /** Flat shipping fee charged below the threshold. */\n+  shippingCents: 599,\n+};\n+\n+/** Round a whole-number percentage of an amount to the nearest cent. */\n+function percentOf(cents, percent) {\n+  return Math.round((cents * percent) / 100);\n+}\n \n /**\n  * Line total in cents after the line's percentage discount.\n@@ -11,37 +25,36 @@ const SHIPPING_CENTS = 599;\n  */\n export function lineTotal(unitPriceCents, quantity, discountPct = 0) {\n   const gross = unitPriceCents * quantity;\n-  const discount = Math.round((gross * discountPct) / 100);\n+  const discount = percentOf(gross, discountPct);\n   return gross - discount;\n }\n \n-/**\n- * Sum of all lines, in cents.\n- */\n+/** Sum of all discounted lines, in cents. */\n export function subtotal(lines) {\n   return lines.reduce(\n-    (sum, line) => sum + lineTotal(line.unitPriceCents, line.quantity, line.discountPct),\n+    (sum, { unitPriceCents, quantity, discountPct }) =>\n+      sum + lineTotal(unitPriceCents, quantity, discountPct),\n     0\n   );\n }\n \n-/**\n- * Tax in cents, rounded to the nearest cent.\n- */\n+/** Tax in cents on the discounted subtotal, rounded to the nearest cent. */\n export function tax(lines) {\n-  return Math.round(subtotal(lines) * TAX_RATE);\n+  return Math.round(subtotal(lines) * PRICING.taxRate);\n }\n \n /**\n- * Shipping in cents. Free when the discounted subtotal clears the threshold.\n+ * Shipping in cents. Free when the discounted subtotal reaches the threshold;\n+ * orders exactly at the threshold ship free.\n  */\n export function shipping(lines) {\n-  return subtotal(lines) > FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n+  return subtotal(lines) >= PRICING.freeShippingThresholdCents\n+    ? 0\n+    : PRICING.shippingCents;\n }\n \n-/**\n- * Order total in cents.\n- */\n+/** Order total in cents: discounted subtotal plus tax plus shipping. */\n export function orderTotal(lines) {\n-  return subtotal(lines) + tax(lines) + shipping(lines);\n+  const discountedSubtotal = subtotal(lines);\n+  return discountedSubtotal + tax(lines) + shipping(lines);\n }\n"
+    },
+    {
+      "task": "loose",
+      "run": 2,
+      "model": "particle/deepseek-v41-flash-1017",
+      "startedAt": "2026-10-23T09:05:51.877Z",
+      "durationMs": 95333,
+      "exitCode": 0,
+      "timedOut": false,
+      "tokens": {
+        "input": 96819,
+        "output": 561,
+        "reasoning": 65,
+        "cacheRead": 196608,
+        "cacheWrite": 0,
+        "steps": 6
+      },
+      "toolCalls": [
+        "glob",
+        "bash",
+        "read",
+        "read",
+        "read",
+        "bash",
+        "edit",
+        "bash"
+      ],
+      "finalText": "All 8 tests pass. Fixed the off-by-one in `shipping` at src/invoice.js:39: the threshold comparison now uses `>=`, so shipping is free exactly at 5000 cents as the test requires.",
+      "errors": [],
+      "stderrTail": "",
+      "patchHash": "b96081feb79ff81cca328c9ce83e57e7aa67a6378e4fd9eb757dfea6dcb2c285",
+      "files": [
+        "src/invoice.js"
+      ],
+      "added": 1,
+      "removed": 1,
+      "tests": {
+        "passed": true,
+        "passCount": 8,
+        "failCount": 0,
+        "summary": "\u2139 pass 8 \u2139 fail 0"
+      },
+      "patch": "diff --git a/src/invoice.js b/src/invoice.js\nindex cddddc2..8ac99d4 100644\n--- a/src/invoice.js\n+++ b/src/invoice.js\n@@ -36,7 +36,7 @@ export function tax(lines) {\n  * Shipping in cents. Free when the discounted subtotal clears the threshold.\n  */\n export function shipping(lines) {\n-  return subtotal(lines) > FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n+  return subtotal(lines) >= FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n }\n \n /**\n"
+    },
+    {
+      "task": "loose",
+      "run": 3,
+      "model": "particle/deepseek-v41-flash-1017",
+      "startedAt": "2026-10-23T09:05:59.613Z",
+      "durationMs": 91566,
+      "exitCode": 0,
+      "timedOut": false,
+      "tokens": {
+        "input": 48885,
+        "output": 790,
+        "reasoning": 347,
+        "cacheRead": 295424,
+        "cacheWrite": 0,
+        "steps": 7
+      },
+      "toolCalls": [
+        "bash",
+        "read",
+        "read",
+        "read",
+        "bash",
+        "edit",
+        "edit",
+        "edit",
+        "bash"
+      ],
+      "finalText": "All 8 tests pass. The bug was in `shipping`: the subtotal check used `>` so exactly 5000 cents didn't qualify for free shipping. Changed to `>=` and renamed the constant to `FREE_SHIPPING_THRESHOLD_CENTS` for clarity (src/invoice.js:5, src/invoice.js:39).",
+      "errors": [],
+      "stderrTail": "",
+      "patchHash": "48554461f847789b455a0e3d21d1c52d3e41012b4a63add449e58e132e81b764",
+      "files": [
+        "src/invoice.js"
+      ],
+      "added": 3,
+      "removed": 3,
+      "tests": {
+        "passed": true,
+        "passCount": 8,
+        "failCount": 0,
+        "summary": "\u2139 pass 8 \u2139 fail 0"
+      },
+      "patch": "diff --git a/src/invoice.js b/src/invoice.js\nindex cddddc2..f5e98a4 100644\n--- a/src/invoice.js\n+++ b/src/invoice.js\n@@ -2,7 +2,7 @@\n // Prices are in cents. Discounts apply per line, before tax.\n \n const TAX_RATE = 0.0825;\n-const FREE_SHIPPING_OVER_CENTS = 5000;\n+const FREE_SHIPPING_THRESHOLD_CENTS = 5000;\n const SHIPPING_CENTS = 599;\n \n /**\n@@ -33,10 +33,10 @@ export function tax(lines) {\n }\n \n /**\n- * Shipping in cents. Free when the discounted subtotal clears the threshold.\n+ * Shipping in cents. Free when the discounted subtotal meets or exceeds the threshold.\n  */\n export function shipping(lines) {\n-  return subtotal(lines) > FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n+  return subtotal(lines) >= FREE_SHIPPING_THRESHOLD_CENTS ? 0 : SHIPPING_CENTS;\n }\n \n /**\n"
+    },
+    {
+      "task": "loose",
+      "run": 4,
+      "model": "particle/deepseek-v41-flash-1017",
+      "startedAt": "2026-10-23T09:06:08.450Z",
+      "durationMs": 90784,
+      "exitCode": 0,
+      "timedOut": false,
+      "tokens": {
+        "input": 49941,
+        "output": 1042,
+        "reasoning": 647,
+        "cacheRead": 250880,
+        "cacheWrite": 0,
+        "steps": 6
+      },
+      "toolCalls": [
+        "bash",
+        "glob",
+        "read",
+        "read",
+        "read",
+        "bash",
+        "write",
+        "bash"
+      ],
+      "finalText": "All 8 tests pass.\n\nThe bug was the shipping boundary: it used `>` instead of `>=`, so a subtotal of exactly 5000 cents was charged shipping. I also consolidated the pricing rules into one `PRICING` object, extracted `taxOn`/`shippingOn` helpers, and made `orderTotal` compute the subtotal once. Test files untouched.",
+      "errors": [],
+      "stderrTail": "",
+      "patchHash": "7e14d05a95c7dbd59f4b7c90124c7ff5d2d7eab11644f217c1b783b57849a31e",
+      "files": [
+        "src/invoice.js"
+      ],
+      "added": 39,
+      "removed": 11,
+      "tests": {
+        "passed": true,
+        "passCount": 8,
+        "failCount": 0,
+        "summary": "\u2139 pass 8 \u2139 fail 0"
+      },
+      "patch": "diff --git a/src/invoice.js b/src/invoice.js\nindex cddddc2..940d537 100644\n--- a/src/invoice.js\n+++ b/src/invoice.js\n@@ -1,18 +1,29 @@\n // Invoice totals for a small storefront.\n // Prices are in cents. Discounts apply per line, before tax.\n \n-const TAX_RATE = 0.0825;\n-const FREE_SHIPPING_OVER_CENTS = 5000;\n-const SHIPPING_CENTS = 599;\n+// All pricing rules live here so the money policy can be read at a glance.\n+const PRICING = Object.freeze({\n+  taxRate: 0.0825,\n+  // The discounted subtotal at which shipping becomes free (inclusive).\n+  freeShippingThresholdCents: 5000,\n+  shippingCents: 599,\n+});\n+\n+/**\n+ * Applies a whole-number percentage discount to an amount in cents,\n+ * rounding the discount to the nearest cent.\n+ */\n+function applyPercentageDiscount(amountCents, discountPct) {\n+  const discountCents = Math.round((amountCents * discountPct) / 100);\n+  return amountCents - discountCents;\n+}\n \n /**\n  * Line total in cents after the line's percentage discount.\n  * discountPct is a whole number, eg 15 means 15% off.\n  */\n export function lineTotal(unitPriceCents, quantity, discountPct = 0) {\n-  const gross = unitPriceCents * quantity;\n-  const discount = Math.round((gross * discountPct) / 100);\n-  return gross - discount;\n+  return applyPercentageDiscount(unitPriceCents * quantity, discountPct);\n }\n \n /**\n@@ -26,22 +37,39 @@ export function subtotal(lines) {\n }\n \n /**\n- * Tax in cents, rounded to the nearest cent.\n+ * Tax in cents on a given subtotal, rounded to the nearest cent.\n+ */\n+function taxOn(subtotalCents) {\n+  return Math.round(subtotalCents * PRICING.taxRate);\n+}\n+\n+/**\n+ * Shipping in cents for a given subtotal. Free once the discounted\n+ * subtotal reaches the threshold (the threshold itself ships free).\n+ */\n+function shippingOn(subtotalCents) {\n+  return subtotalCents >= PRICING.freeShippingThresholdCents ? 0 : PRICING.shippingCents;\n+}\n+\n+/**\n+ * Tax in cents, charged on the discounted subtotal.\n  */\n export function tax(lines) {\n-  return Math.round(subtotal(lines) * TAX_RATE);\n+  return taxOn(subtotal(lines));\n }\n \n /**\n  * Shipping in cents. Free when the discounted subtotal clears the threshold.\n  */\n export function shipping(lines) {\n-  return subtotal(lines) > FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n+  return shippingOn(subtotal(lines));\n }\n \n /**\n- * Order total in cents.\n+ * Order total in cents. The subtotal is computed once and reused so\n+ * tax and shipping always agree with the total.\n  */\n export function orderTotal(lines) {\n-  return subtotal(lines) + tax(lines) + shipping(lines);\n+  const subtotalCents = subtotal(lines);\n+  return subtotalCents + taxOn(subtotalCents) + shippingOn(subtotalCents);\n }\n"
+    },
+    {
+      "task": "loose",
+      "run": 5,
+      "model": "particle/deepseek-v41-flash-1017",
+      "startedAt": "2026-10-23T09:07:31.865Z",
+      "durationMs": 28481,
+      "exitCode": 0,
+      "timedOut": false,
+      "tokens": {
+        "input": 96850,
+        "output": 905,
+        "reasoning": 419,
+        "cacheRead": 197120,
+        "cacheWrite": 0,
+        "steps": 6
+      },
+      "toolCalls": [
+        "bash",
+        "read",
+        "bash",
+        "bash",
+        "bash",
+        "write",
+        "bash"
+      ],
+      "finalText": "All 8 tests pass. Fixed the threshold bug (`>` \u2192 `>=` at src/invoice.js:42) and centralized pricing constants plus shared `taxOn`/`shippingOn` helpers so `orderTotal` computes the subtotal once.",
+      "errors": [],
+      "stderrTail": "",
+      "patchHash": "287c0c085055d75cb0b4a1a01f0b103260dd1b06488461ce8426e5837dee77d8",
+      "files": [
+        "src/invoice.js"
+      ],
+      "added": 25,
+      "removed": 6,
+      "tests": {
+        "passed": true,
+        "passCount": 8,
+        "failCount": 0,
+        "summary": "\u2139 pass 8 \u2139 fail 0"
+      },
+      "patch": "diff --git a/src/invoice.js b/src/invoice.js\nindex cddddc2..303f83a 100644\n--- a/src/invoice.js\n+++ b/src/invoice.js\n@@ -1,9 +1,12 @@\n // Invoice totals for a small storefront.\n // Prices are in cents. Discounts apply per line, before tax.\n \n-const TAX_RATE = 0.0825;\n-const FREE_SHIPPING_OVER_CENTS = 5000;\n-const SHIPPING_CENTS = 599;\n+// All pricing rules live here so they can be tuned in one place.\n+const PRICING = {\n+  taxRate: 0.0825,\n+  freeShippingThresholdCents: 5000,\n+  shippingCents: 599,\n+};\n \n /**\n  * Line total in cents after the line's percentage discount.\n@@ -25,23 +28,39 @@ export function subtotal(lines) {\n   );\n }\n \n+/**\n+ * Tax in cents on a given discounted subtotal, rounded to the nearest cent.\n+ */\n+function taxOn(subtotalCents) {\n+  return Math.round(subtotalCents * PRICING.taxRate);\n+}\n+\n+/**\n+ * Shipping in cents for a given discounted subtotal.\n+ * Free when the subtotal reaches the threshold.\n+ */\n+function shippingOn(subtotalCents) {\n+  return subtotalCents >= PRICING.freeShippingThresholdCents ? 0 : PRICING.shippingCents;\n+}\n+\n /**\n  * Tax in cents, rounded to the nearest cent.\n  */\n export function tax(lines) {\n-  return Math.round(subtotal(lines) * TAX_RATE);\n+  return taxOn(subtotal(lines));\n }\n \n /**\n  * Shipping in cents. Free when the discounted subtotal clears the threshold.\n  */\n export function shipping(lines) {\n-  return subtotal(lines) > FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n+  return shippingOn(subtotal(lines));\n }\n \n /**\n  * Order total in cents.\n  */\n export function orderTotal(lines) {\n-  return subtotal(lines) + tax(lines) + shipping(lines);\n+  const discountedSubtotal = subtotal(lines);\n+  return discountedSubtotal + taxOn(discountedSubtotal) + shippingOn(discountedSubtotal);\n }\n"
+    },
+    {
+      "task": "tight",
+      "run": 1,
+      "model": "particle/deepseek-v41-flash-1017",
+      "startedAt": "2026-10-23T09:04:04.190Z",
+      "durationMs": 60187,
+      "exitCode": 0,
+      "timedOut": false,
+      "tokens": {
+        "input": 97545,
+        "output": 546,
+        "reasoning": 172,
+        "cacheRead": 195328,
+        "cacheWrite": 0,
+        "steps": 6
+      },
+      "toolCalls": [
+        "bash",
+        "read",
+        "read",
+        "read",
+        "bash",
+        "edit",
+        "bash"
+      ],
+      "finalText": "Fixed the boundary check in `src/invoice.js:39`: shipping is free at exactly the 5000-cent threshold, so it now uses `>=` instead of `>`. All 8 tests pass.",
+      "errors": [],
+      "stderrTail": "",
+      "patchHash": "b96081feb79ff81cca328c9ce83e57e7aa67a6378e4fd9eb757dfea6dcb2c285",
+      "files": [
+        "src/invoice.js"
+      ],
+      "added": 1,
+      "removed": 1,
+      "tests": {
+        "passed": true,
+        "passCount": 8,
+        "failCount": 0,
+        "summary": "\u2139 pass 8 \u2139 fail 0"
+      },
+      "patch": "diff --git a/src/invoice.js b/src/invoice.js\nindex cddddc2..8ac99d4 100644\n--- a/src/invoice.js\n+++ b/src/invoice.js\n@@ -36,7 +36,7 @@ export function tax(lines) {\n  * Shipping in cents. Free when the discounted subtotal clears the threshold.\n  */\n export function shipping(lines) {\n-  return subtotal(lines) > FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n+  return subtotal(lines) >= FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n }\n \n /**\n"
+    },
+    {
+      "task": "tight",
+      "run": 2,
+      "model": "particle/deepseek-v41-flash-1017",
+      "startedAt": "2026-10-23T09:04:04.209Z",
+      "durationMs": 52487,
+      "exitCode": 0,
+      "timedOut": false,
+      "tokens": {
+        "input": 99685,
+        "output": 487,
+        "reasoning": 13,
+        "cacheRead": 143872,
+        "cacheWrite": 0,
+        "steps": 5
+      },
+      "toolCalls": [
+        "bash",
+        "glob",
+        "read",
+        "read",
+        "bash",
+        "edit",
+        "bash"
+      ],
+      "finalText": "Fixed `src/invoice.js:39`: shipping threshold was exclusive (`>`), now inclusive (`>=`). All 8 tests pass.",
+      "errors": [],
+      "stderrTail": "",
+      "patchHash": "b96081feb79ff81cca328c9ce83e57e7aa67a6378e4fd9eb757dfea6dcb2c285",
+      "files": [
+        "src/invoice.js"
+      ],
+      "added": 1,
+      "removed": 1,
+      "tests": {
+        "passed": true,
+        "passCount": 8,
+        "failCount": 0,
+        "summary": "\u2139 pass 8 \u2139 fail 0"
+      },
+      "patch": "diff --git a/src/invoice.js b/src/invoice.js\nindex cddddc2..8ac99d4 100644\n--- a/src/invoice.js\n+++ b/src/invoice.js\n@@ -36,7 +36,7 @@ export function tax(lines) {\n  * Shipping in cents. Free when the discounted subtotal clears the threshold.\n  */\n export function shipping(lines) {\n-  return subtotal(lines) > FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n+  return subtotal(lines) >= FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n }\n \n /**\n"
+    },
+    {
+      "task": "tight",
+      "run": 3,
+      "model": "particle/deepseek-v41-flash-1017",
+      "startedAt": "2026-10-23T09:04:04.097Z",
+      "durationMs": 58006,
+      "exitCode": 0,
+      "timedOut": false,
+      "tokens": {
+        "input": 98101,
+        "output": 418,
+        "reasoning": 19,
+        "cacheRead": 143872,
+        "cacheWrite": 0,
+        "steps": 5
+      },
+      "toolCalls": [
+        "bash",
+        "read",
+        "bash",
+        "edit",
+        "bash"
+      ],
+      "finalText": "Fixed the off-by-one comparison in `src/invoice.js:39`: threshold is inclusive, changed `>` to `>=`. All 8 tests pass.",
+      "errors": [],
+      "stderrTail": "",
+      "patchHash": "b96081feb79ff81cca328c9ce83e57e7aa67a6378e4fd9eb757dfea6dcb2c285",
+      "files": [
+        "src/invoice.js"
+      ],
+      "added": 1,
+      "removed": 1,
+      "tests": {
+        "passed": true,
+        "passCount": 8,
+        "failCount": 0,
+        "summary": "\u2139 pass 8 \u2139 fail 0"
+      },
+      "patch": "diff --git a/src/invoice.js b/src/invoice.js\nindex cddddc2..8ac99d4 100644\n--- a/src/invoice.js\n+++ b/src/invoice.js\n@@ -36,7 +36,7 @@ export function tax(lines) {\n  * Shipping in cents. Free when the discounted subtotal clears the threshold.\n  */\n export function shipping(lines) {\n-  return subtotal(lines) > FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n+  return subtotal(lines) >= FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n }\n \n /**\n"
+    },
+    {
+      "task": "tight",
+      "run": 4,
+      "model": "particle/deepseek-v41-flash-1017",
+      "startedAt": "2026-10-23T09:05:00.706Z",
+      "durationMs": 45865,
+      "exitCode": 0,
+      "timedOut": false,
+      "tokens": {
+        "input": 94023,
+        "output": 373,
+        "reasoning": 109,
+        "cacheRead": 146688,
+        "cacheWrite": 0,
+        "steps": 5
+      },
+      "toolCalls": [
+        "bash",
+        "bash",
+        "edit",
+        "bash"
+      ],
+      "finalText": "Fixed `src/invoice.js:41`: shipping threshold used `>` instead of `>=`, so orders exactly at 5000 cents were charged. All 8 tests pass.",
+      "errors": [],
+      "stderrTail": "",
+      "patchHash": "b96081feb79ff81cca328c9ce83e57e7aa67a6378e4fd9eb757dfea6dcb2c285",
+      "files": [
+        "src/invoice.js"
+      ],
+      "added": 1,
+      "removed": 1,
+      "tests": {
+        "passed": true,
+        "passCount": 8,
+        "failCount": 0,
+        "summary": "\u2139 pass 8 \u2139 fail 0"
+      },
+      "patch": "diff --git a/src/invoice.js b/src/invoice.js\nindex cddddc2..8ac99d4 100644\n--- a/src/invoice.js\n+++ b/src/invoice.js\n@@ -36,7 +36,7 @@ export function tax(lines) {\n  * Shipping in cents. Free when the discounted subtotal clears the threshold.\n  */\n export function shipping(lines) {\n-  return subtotal(lines) > FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n+  return subtotal(lines) >= FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n }\n \n /**\n"
+    },
+    {
+      "task": "tight",
+      "run": 5,
+      "model": "particle/deepseek-v41-flash-1017",
+      "startedAt": "2026-10-23T09:05:05.253Z",
+      "durationMs": 49347,
+      "exitCode": 0,
+      "timedOut": false,
+      "tokens": {
+        "input": 96820,
+        "output": 539,
+        "reasoning": 20,
+        "cacheRead": 148736,
+        "cacheWrite": 0,
+        "steps": 5
+      },
+      "toolCalls": [
+        "bash",
+        "bash",
+        "read",
+        "read",
+        "bash",
+        "edit",
+        "bash"
+      ],
+      "finalText": "Fixed the shipping threshold in `src/invoice.js:39`: changed `>` to `>=` so free shipping applies exactly at $50. All 8 tests pass.",
+      "errors": [],
+      "stderrTail": "",
+      "patchHash": "b96081feb79ff81cca328c9ce83e57e7aa67a6378e4fd9eb757dfea6dcb2c285",
+      "files": [
+        "src/invoice.js"
+      ],
+      "added": 1,
+      "removed": 1,
+      "tests": {
+        "passed": true,
+        "passCount": 8,
+        "failCount": 0,
+        "summary": "\u2139 pass 8 \u2139 fail 0"
+      },
+      "patch": "diff --git a/src/invoice.js b/src/invoice.js\nindex cddddc2..8ac99d4 100644\n--- a/src/invoice.js\n+++ b/src/invoice.js\n@@ -36,7 +36,7 @@ export function tax(lines) {\n  * Shipping in cents. Free when the discounted subtotal clears the threshold.\n  */\n export function shipping(lines) {\n-  return subtotal(lines) > FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n+  return subtotal(lines) >= FREE_SHIPPING_OVER_CENTS ? 0 : SHIPPING_CENTS;\n }\n \n /**\n"
+    }
+  ],
+  "similarity": {
+    "tight": [
+      [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    ],
+    "loose": [
+      [
+        1,
+        0.04081632653061224,
+        0.11320754716981132,
+        0.3595505617977528,
+        0.43243243243243246
+      ],
+      [
+        0.04081632653061224,
+        1,
+        0.25,
+        0.045454545454545456,
+        0.06896551724137931
+      ],
+      [
+        0.11320754716981132,
+        0.25,
+        1,
+        0.08333333333333333,
+        0.12121212121212122
+      ],
+      [
+        0.3595505617977528,
+        0.045454545454545456,
+        0.08333333333333333,
+        1,
+        0.5507246376811594
+      ],
+      [
+        0.43243243243243246,
+        0.06896551724137931,
+        0.12121212121212122,
+        0.5507246376811594,
+        1
+      ]
+    ]
+  },
+  "endpoint": "https://api.particle.ai/v1",
+  "sampling": {
+    "capturedAt": "2026-10-23T09:22:42.643Z",
+    "temperaturePresent": false,
+    "seedPresent": false,
+    "maxTokens": 32000,
+    "stream": true,
+    "toolChoice": "auto",
+    "toolCount": 10,
+    "promptChars": 197439
+  }
+}

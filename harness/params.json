@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-10-23T09:22:42.643Z",
+  "request": {
+    "model": "deepseek-v41-flash-1017",
+    "stream": true,
+    "max_tokens": 32000,
+    "tool_choice": "auto"
+  },
+  "hasSeed": false,
+  "temperaturePresent": false,
+  "toolCount": 10,
+  "messageRoles": [
+    "system",
+    "user"
+  ],
+  "promptChars": 197439
+}
